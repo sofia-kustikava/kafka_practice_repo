@@ -1,0 +1,16 @@
+server:
+  port: 8081
+spring:
+  application:
+    name: streams-service
+  kafka:
+    bootstrap-servers: localhost:9092,localhost:9093,localhost:9094
+    streams:
+      application-id: github-analytics-app
+      properties:
+        processing.guarantee: exactly_once_v2
+        default.key.serde: org.apache.kafka.common.serialization.Serdes$StringSerde
+        default.value.serde: org.springframework.kafka.support.serializer.JsonSerde
+    consumer:
+      properties:
+        spring.json.trusted.packages: "*"

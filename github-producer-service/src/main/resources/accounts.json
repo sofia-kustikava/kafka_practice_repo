@@ -1,0 +1,22 @@
+[
+  {
+    "username": "sofia-kustikava",
+    "interval": "100w"
+  },
+  {
+    "username": "torvalds",
+    "interval": "10w"
+  },
+  {
+    "username": "joshlong",
+    "interval": "10w"
+  },
+  {
+    "username": "sindresorhus",
+    "interval": "10w"
+  },
+  {
+    "username": "karpathy",
+    "interval": "10w"
+  }
+]
