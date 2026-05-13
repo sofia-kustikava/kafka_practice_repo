@@ -33,7 +33,8 @@ public class GithubKafkaListener {
                         commit.getSHA1(),
                         commit.getCommitShortInfo().getMessage(),
                         commit.getCommitDate(),
-                        language != null ? language : "Unknown"
+                        language != null ? language : "Unknown",
+                        commit.getOwner().getName()
                 );
                 kafkaTemplate.send(COMMITS_TOPIC, commitRecord.username(), commitRecord);
             }

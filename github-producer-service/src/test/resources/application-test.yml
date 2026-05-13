@@ -1,0 +1,21 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: streams-service-test
+  kafka:
+    bootstrap-servers: ${spring.embedded.kafka.brokers}
+    streams:
+      application-id: github-analytics-test-app
+      properties:
+        processing.guarantee: at_least_once
+        default.key.serde: org.apache.kafka.common.serialization.Serdes$StringSerde
+        default.value.serde: org.springframework.kafka.support.serializer.JsonSerde
+    consumer:
+      auto-offset-reset: earliest
+      properties:
+        spring.json.trusted.packages: "*"
+
+github:
+  token: dummy-token
