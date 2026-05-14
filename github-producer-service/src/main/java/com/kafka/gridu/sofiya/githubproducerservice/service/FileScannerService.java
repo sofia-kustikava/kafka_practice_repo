@@ -27,7 +27,8 @@ public class FileScannerService implements CommandLineRunner {
     public void run(String... args) throws Exception {
         log.info("Starting file scanning process..");
         InputStream inputStream = new ClassPathResource("accounts.json").getInputStream();
-        List<GithubAccount> accounts = objectMapper.readValue(inputStream, new TypeReference<>() {});
+        List<GithubAccount> accounts = objectMapper.readValue(inputStream, new TypeReference<>() {
+        });
 
         log.info("Found {} accounts in file", accounts.size());
 

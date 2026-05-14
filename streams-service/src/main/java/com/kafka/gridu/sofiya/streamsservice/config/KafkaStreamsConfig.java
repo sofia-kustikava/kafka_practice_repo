@@ -20,8 +20,8 @@ import org.springframework.kafka.support.serializer.JsonSerde;
 import org.springframework.kafka.support.serializer.JsonSerializer;
 
 import java.time.DayOfWeek;
-import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.Date;
 
 @Slf4j
 @Configuration
@@ -33,88 +33,86 @@ public class KafkaStreamsConfig {
 
     @Bean
     public KStream<String, Commit> kStream(StreamsBuilder streamsBuilder) {
-        JsonDeserializer<Commit> deserializer = new JsonDeserializer<>(Commit.class);
-        deserializer.setUseTypeHeaders(false);
-        deserializer.addTrustedPackages("*");
-
-        JsonSerde<Commit> commitSerde = new JsonSerde<>(new JsonSerializer<>(), deserializer);
-        JsonSerde<AvgMsgAccumulator> avgMessageSerde = new JsonSerde<>(AvgMsgAccumulator.class);
-
         KStream<String, Commit> commitStream = streamsBuilder.stream(
                 "github_commits",
-                Consumed.with(
-                        Serdes.String(),
-                        commitSerde)
+                Consumed.with(Serdes.String(), commitSerde())
         );
-
-        commitStream
-                .groupBy((key, value) -> "TOTAL_COMMIT_COUNT")
-                .count(Materialized.as("total-store"))
-                .toStream()
-                .foreach((key, count) -> schedulerService.updateTotalCommits(count));
-
-        commitStream
-                .groupByKey()
-                .count(Materialized.as("user-store"))
-                .toStream()
-                .foreach(schedulerService::updateUserCommitsCount);
-
-        commitStream.groupBy((key, value) -> value.programmingLanguage() != null ? value.programmingLanguage() : "Unknown")
-                .count(Materialized.as("lang-store"))
-                .toStream()
-                .foreach(schedulerService::updateLanguageStatsCount);
-
-        commitStream
-                .groupBy((key, value) -> "AVG_MESSAGE_LENGTH")
-                .aggregate(
-                        () -> new AvgMsgAccumulator(0, 0),
-                        (key, value, aggregate) -> new AvgMsgAccumulator(
-                                aggregate.count() + 1,
-                                aggregate.sum() + value.message().length()
-                        ),
-                        Materialized.<String, AvgMsgAccumulator, KeyValueStore<Bytes, byte[]>>as("avg-message-length-store")
-                                .withValueSerde(avgMessageSerde)
-                ).toStream()
-                .foreach((key, agg) ->
-                        schedulerService.updateAvgMessageLength(agg.sum() / agg.count())
-                );
-
-        commitStream
-                .filter((key, value) -> {
-                    if (value.date() == null) return false;
-                    LocalDate date = value.date().toInstant()
-                            .atZone(ZoneId.systemDefault())
-                            .toLocalDate();
-                    DayOfWeek day = date.getDayOfWeek();
-                    return day == DayOfWeek.SATURDAY || day == DayOfWeek.SUNDAY;
-                })
-                .groupBy((key, value) -> "WEEKEND_COMMITS_COUNT")
-                .count(Materialized.as("weekend-commits-store"))
-                .toStream()
-                .foreach((key, count) -> schedulerService.updateWeekendCommits(count));
-
-        commitStream
-                .mapValues(value -> {
-                    java.time.LocalDate date = value.date().toInstant()
-                            .atZone(java.time.ZoneId.systemDefault())
-                            .toLocalDate();
-                    return date.getDayOfWeek().toString();
-                })
-                .groupBy((key, dayName) -> dayName)
-                .count(Materialized.as("days-activity-store"))
-                .toStream()
-                .foreach(schedulerService::updateMostActiveDate);
-
-        commitStream
-                .groupBy((key, value) -> value.repositoryName())
-                .count(Materialized.as("repo-counts-store"))
-                .toStream()
-                .groupBy((key, value) -> "TOTAL_REPOS_METRIC")
-                .count()
-                .toStream()
-                .foreach((key, count) -> schedulerService.updateTotalRepos(count));
+        processBasicMetrics(commitStream);
+        processAverageMessageLength(commitStream);
+        processWeekendActivity(commitStream);
+        processDailyActivity(commitStream);
+        processRepositoryMetrics(commitStream);
 
         return commitStream;
     }
 
+    private void processBasicMetrics(KStream<String, Commit> stream) {
+        stream.groupBy((k, v) -> "TOTAL_COUNT")
+                .count(Materialized.as("total-store"))
+                .toStream().foreach((k, c) -> schedulerService.updateTotalCommits(c));
+
+        stream.groupByKey()
+                .count(Materialized.as("user-store"))
+                .toStream().foreach(schedulerService::updateTotalContributorsCount);
+
+        stream.groupBy((k, v) -> v.programmingLanguage() != null ? v.programmingLanguage() : "Unknown")
+                .count(Materialized.as("lang-store"))
+                .toStream().foreach(schedulerService::updateLanguageStatsCount);
+    }
+
+    private void processAverageMessageLength(KStream<String, Commit> stream) {
+        stream.groupBy((k, v) -> "AVG_LEN")
+                .aggregate(
+                        () -> new AvgMsgAccumulator(0, 0),
+                        (k, v, agg) -> {
+                            long len = (v.message() != null) ? v.message().length() : 0;
+                            return new AvgMsgAccumulator(agg.count() + 1, agg.sum() + len);
+                        },
+                        Materialized.<String, AvgMsgAccumulator, KeyValueStore<Bytes, byte[]>>as("avg-len-store")
+                                .withValueSerde(new JsonSerde<>(AvgMsgAccumulator.class))
+                )
+                .toStream()
+                .foreach((k, agg) -> schedulerService.updateAvgMessageLength(agg.sum() / agg.count()));
+    }
+
+    private void processWeekendActivity(KStream<String, Commit> stream) {
+        stream.filter((k, v) -> isWeekend(v.date()))
+                .groupBy((k, v) -> "WEEKEND_COUNT")
+                .count(Materialized.as("weekend-store"))
+                .toStream().foreach((k, c) -> schedulerService.updateWeekendCommits(c));
+    }
+
+    private void processDailyActivity(KStream<String, Commit> stream) {
+        stream.mapValues(v -> getDayOfWeekName(v.date()))
+                .groupBy((k, day) -> day)
+                .count(Materialized.as("days-activity-store"))
+                .toStream().foreach(schedulerService::updateMostActiveDate);
+    }
+
+    private void processRepositoryMetrics(KStream<String, Commit> stream) {
+        stream.groupBy((k, v) -> v.repositoryName() != null ? v.repositoryName() : "Unknown")
+                .count(Materialized.as("repo-counts-store"))
+                .toStream()
+                .groupBy((k, v) -> "TOTAL_REPOS")
+                .count()
+                .toStream().foreach((k, c) -> schedulerService.updateTotalRepos(c));
+    }
+
+    private boolean isWeekend(Date date) {
+        if (date == null) return false;
+        DayOfWeek day = date.toInstant().atZone(ZoneId.systemDefault()).toLocalDate().getDayOfWeek();
+        return day == DayOfWeek.SATURDAY || day == DayOfWeek.SUNDAY;
+    }
+
+    private String getDayOfWeekName(Date date) {
+        if (date == null) return "UNKNOWN";
+        return date.toInstant().atZone(ZoneId.systemDefault()).toLocalDate().getDayOfWeek().toString();
+    }
+
+    private JsonSerde<Commit> commitSerde() {
+        JsonDeserializer<Commit> des = new JsonDeserializer<>(Commit.class);
+        des.addTrustedPackages("*");
+        des.setUseTypeHeaders(false);
+        return new JsonSerde<>(new JsonSerializer<>(), des);
+    }
 }

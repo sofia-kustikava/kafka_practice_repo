@@ -24,7 +24,7 @@ public class SchedulerService {
     private final AtomicLong totalRepos = new AtomicLong(0);
 
     private final Map<String, Long> mostActiveDate = new ConcurrentHashMap<>();
-    private final Map<String, Long> userCommits = new ConcurrentHashMap<>();
+    private final Map<String, Long> totalContributors = new ConcurrentHashMap<>();
     private final Map<String, Long> languageStats  = new ConcurrentHashMap<>();
 
 
@@ -48,8 +48,8 @@ public class SchedulerService {
         mostActiveDate.put(day, count);
     }
 
-    public void updateUserCommitsCount(String user, long count) {
-        userCommits.put(user, count);
+    public void updateTotalContributorsCount(String user, long count) {
+        totalContributors.put(user, count);
     }
 
     public void updateLanguageStatsCount(String lang, long count) {
@@ -61,7 +61,7 @@ public class SchedulerService {
         try {
             Function<Map.Entry<String, Long>, String> entryListCommitsFunction =
                     e -> e.getKey() + ": " + e.getValue() + " commits";
-            String topContributors = userCommits.entrySet().stream()
+            String topContributors = totalContributors.entrySet().stream()
                     .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
                     .limit(5)
                     .map(entryListCommitsFunction)
@@ -93,7 +93,7 @@ public class SchedulerService {
                     """
                     ,
                     totalCommits.get(),
-                    userCommits.size(),
+                    totalContributors.size(),
                     topContributors.isEmpty() ? "No data yet" : topContributors,
                     langStats.isEmpty() ? "No data yet" : langStats,
                     avgMessageLength.get(),

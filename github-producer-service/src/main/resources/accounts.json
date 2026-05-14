@@ -1,11 +1,11 @@
 [
   {
     "username": "sofia-kustikava",
-    "interval": "100w"
+    "interval": "1y"
   },
   {
     "username": "torvalds",
-    "interval": "10w"
+    "interval": "600h"
   },
   {
     "username": "joshlong",

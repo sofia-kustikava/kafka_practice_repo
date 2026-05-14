@@ -77,6 +77,9 @@ public class GithubService {
         } else if (interval.endsWith("w")) {
             int weeks = Integer.parseInt(interval.replace("w", ""));
             return Date.from(now.minusWeeks(weeks).atZone(ZoneId.systemDefault()).toInstant());
+        } else if (interval.endsWith("y")) {
+            int years = Integer.parseInt(interval.replace("y", ""));
+            return Date.from(now.minusYears(years).atZone(ZoneId.systemDefault()).toInstant());
         }
         return Date.from(now.minusDays(1).atZone(ZoneId.systemDefault()).toInstant());
     }
