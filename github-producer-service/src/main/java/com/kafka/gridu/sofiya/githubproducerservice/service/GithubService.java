@@ -68,19 +68,19 @@ public class GithubService {
 
     private Date parseInterval(String interval) {
         LocalDateTime now = LocalDateTime.now();
-        if (interval.endsWith("d")) {
-            int days = Integer.parseInt(interval.replace("d", ""));
-            return Date.from(now.minusDays(days).atZone(ZoneId.systemDefault()).toInstant());
-        } else if (interval.endsWith("h")) {
-            int hours = Integer.parseInt(interval.replace("h", ""));
-            return Date.from(now.minusHours(hours).atZone(ZoneId.systemDefault()).toInstant());
-        } else if (interval.endsWith("w")) {
-            int weeks = Integer.parseInt(interval.replace("w", ""));
-            return Date.from(now.minusWeeks(weeks).atZone(ZoneId.systemDefault()).toInstant());
-        } else if (interval.endsWith("y")) {
-            int years = Integer.parseInt(interval.replace("y", ""));
-            return Date.from(now.minusYears(years).atZone(ZoneId.systemDefault()).toInstant());
+        if (interval != null && interval.matches("^\\d+[dhwy]$")) {
+            char unit = interval.charAt(interval.length() - 1);
+            int value = Integer.parseInt(interval.substring(0, interval.length() - 1));
+
+            return switch (unit) {
+                case 'd' -> Date.from(now.minusDays(value).atZone(ZoneId.systemDefault()).toInstant());
+                case 'h' -> Date.from(now.minusHours(value).atZone(ZoneId.systemDefault()).toInstant());
+                case 'w' -> Date.from(now.minusWeeks(value).atZone(ZoneId.systemDefault()).toInstant());
+                case 'y' -> Date.from(now.minusYears(value).atZone(ZoneId.systemDefault()).toInstant());
+                default -> Date.from(now.minusDays(1).atZone(ZoneId.systemDefault()).toInstant());
+            };
         }
+        log.warn("Invalid interval format: {}. Using default (1d).", interval);
         return Date.from(now.minusDays(1).atZone(ZoneId.systemDefault()).toInstant());
     }
 }
